@@ -19,10 +19,23 @@ export interface ShortcutHandlers {
   help: () => void;
 }
 
-export function useShortcuts(
-  handlers: ShortcutHandlers,
-  disabled = false,
-) {
+const TOOL_KEYS: Record<string, Tool> = {
+  v: "select", "1": "select",
+  h: "hand",
+  r: "rect", "2": "rect",
+  d: "diamond", "3": "diamond",
+  o: "ellipse", "4": "ellipse",
+  a: "arrow", "5": "arrow",
+  l: "line", "6": "line",
+  p: "pen", "7": "pen",
+  t: "text", "8": "text",
+  e: "eraser", "9": "eraser",
+};
+
+// Only real text fields should swallow shortcuts, not sliders, colour pickers or buttons
+const TEXT_INPUT_TYPES = new Set(["text", "search", "email", "url", "password", "number", "tel"]);
+
+export function useShortcuts(handlers: ShortcutHandlers, disabled = false) {
   const ref = useRef(handlers);
   const disabledRef = useRef(disabled);
 
@@ -34,13 +47,10 @@ export function useShortcuts(
   useEffect(() => {
     const isTyping = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-
-      return (
-        !!t &&
-        (t.tagName === "INPUT" ||
-          t.tagName === "TEXTAREA" ||
-          t.isContentEditable)
-      );
+      if (!t) return false;
+      if (t.isContentEditable || t.tagName === "TEXTAREA") return true;
+      if (t.tagName === "INPUT") return TEXT_INPUT_TYPES.has((t as HTMLInputElement).type);
+      return false;
     };
 
     const onDown = (e: KeyboardEvent) => {
@@ -77,7 +87,14 @@ export function useShortcuts(
           e.preventDefault();
           h.zoomBy(1 / 1.2);
         }
+        return;
+      }
 
+      if (e.altKey) return;
+
+      if (TOOL_KEYS[k]) {
+        e.preventDefault();
+        h.setTool(TOOL_KEYS[k]);
         return;
       }
 
@@ -87,47 +104,31 @@ export function useShortcuts(
           e.preventDefault();
           h.remove();
           break;
-
-        case "v":
-          e.preventDefault();
-          h.setTool("select");
+        case "q":
+          h.toggleLock();
           break;
-
-        case "p":
-          e.preventDefault();
-          h.setTool("pen");
-          break;
-
-        case "escape":
-          h.deselect();
-          break;
-
-        case " ":
-          e.preventDefault();
-          if (!e.repeat) h.setPanMode(true);
-          break;
-
         case "?":
           e.preventDefault();
           h.help();
+          break;
+        case "escape":
+          h.deselect();
+          break;
+        case " ":
+          e.preventDefault();
+          if (!e.repeat) h.setPanMode(true);
           break;
       }
     };
 
     const onUp = (e: KeyboardEvent) => {
-      if (e.key === " ") {
-        ref.current.setPanMode(false);
-      }
+      if (e.key === " ") ref.current.setPanMode(false);
     };
-
-    const onBlur = () => {
-      ref.current.setPanMode(false);
-    };
+    const onBlur = () => ref.current.setPanMode(false);
 
     window.addEventListener("keydown", onDown);
     window.addEventListener("keyup", onUp);
     window.addEventListener("blur", onBlur);
-
     return () => {
       window.removeEventListener("keydown", onDown);
       window.removeEventListener("keyup", onUp);
